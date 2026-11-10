@@ -171,7 +171,8 @@ jobs:
           if-no-files-found: error
 
   # Dev Build 直接在仓库内构建多架构镜像并推送 Docker Hub。
-  # 不依赖上游跨仓库构建；镜像名取 secrets.DOCKERHUB_USERNAME/snowluma，tag=dev。
+  # 不依赖上游跨仓库构建。镜像名固定为 ovonull/snowluma（namespace 写死为组织名 ovonull，
+  # 登录仍用 secrets.DOCKERHUB_USERNAME/TOKEN 的令牌，需对 ovonull 组织有写权限），tag=dev。
   # 需配 DOCKERHUB_USERNAME 与 DOCKERHUB_TOKEN。
   docker:
     needs: [build]
@@ -215,4 +216,4 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/snowluma:dev
+            ovonull/snowluma:dev
