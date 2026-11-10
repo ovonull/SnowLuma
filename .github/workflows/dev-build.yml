@@ -162,7 +162,7 @@ jobs:
       # Single upload step — glob picks up both variants (.zip on Windows,
       # .tar.gz on Linux) for this matrix row.
       - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: SnowLuma-dev-${{ github.sha }}-${{ matrix.name }}
           path: SnowLuma-dev-${{ matrix.name }}*
@@ -170,26 +170,11 @@ jobs:
           overwrite: true
           if-no-files-found: error
 
-      # Deterministic-name hand-off artifact consumed by the cross-repo dev
-      # Docker build (SnowLuma.Docker.Framework/docker-image.yml downloads it by
-      # this exact name). linux-x64 only — dev images are amd64-only. Just the
-      # lite tarball; the container already ships its own Node runtime.
-      - name: Upload dev Docker hand-off artifact
-        if: matrix.name == 'linux-x64' && github.ref == 'refs/heads/dev'
-        uses: actions/upload-artifact@v7
-        with:
-          name: snowluma-dev-docker-linux-x64
-          path: SnowLuma-dev-linux-x64-lite.tar.gz
-          retention-days: 3
-          overwrite: true
-          if-no-files-found: error
-
-  # dev 分支的 Dev Build 直接在仓库内构建多架构镜像并推送 Docker Hub。
+  # Dev Build 直接在仓库内构建多架构镜像并推送 Docker Hub。
   # 不依赖上游跨仓库构建；镜像名取 secrets.DOCKERHUB_USERNAME/snowluma，tag=dev。
   # 需配 DOCKERHUB_USERNAME 与 DOCKERHUB_TOKEN。
   docker:
     needs: [build]
-    if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
