@@ -1,0 +1,27 @@
+services:
+  snowluma:
+    build:
+      context: .
+      args:
+        # 你的 fork 版本与仓库，按需修改
+        SNOWLUMA_VERSION: v2.4.2
+        SNOWLUMA_REPO: ovonull/SnowLuma
+    container_name: snowluma
+    restart: unless-stopped
+    ports:
+      # WebUI 管理界面
+      - "5099:5099"
+      # OneBot WebSocket / HTTP 端口按需放开（在 WebUI 里配置具体端口后在此加映射）
+      # - "6700:6700"
+    environment:
+      SNOWLUMA_WEBUI_HOST: "0.0.0.0"
+      SNOWLUMA_ACCEPT_EULA: "1"
+      SNOWLUMA_ACCEPT_PRIVACY: "1"
+      SNOWLUMA_LOG_DIR: "/data/logs"
+      # 容器环境一般没有桌面 QQ；如需自动注入 QQ 进程再开启
+      # SNOWLUMA_HOOK_AUTOLOAD: "1"
+    volumes:
+      - snowluma-data:/data
+
+volumes:
+  snowluma-data:
