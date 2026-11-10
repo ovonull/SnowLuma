@@ -192,9 +192,10 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
 
   # 发版后在本仓库内直接 build 镜像并推送到 Docker Hub。
-  # 不依赖上游跨仓库构建（fork 无权限）。镜像名固定为 ovonull/snowluma：
-  # namespace 写死成组织名 ovonull，登录仍用 secrets.DOCKERHUB_USERNAME/TOKEN 的令牌，
-  # 该令牌需对 ovonull 组织有写权限。latest 与版本号两个标签由发版触发。
+  # 不依赖上游跨仓库构建（fork 无权限）。镜像名从仓库变量 vars.DOCKER_IMAGE 读取
+  # （当前 ovonull/snowluma），改镜像名只需在 Settings > Variables 改 DOCKER_IMAGE。
+  # 登录仍用 secrets.DOCKERHUB_USERNAME/TOKEN 的令牌，需对镜像所在组织有写权限。
+  # latest 与版本号两个标签由发版触发。
   # 需在仓库 Settings > Secrets 配置 DOCKERHUB_USERNAME 与 DOCKERHUB_TOKEN（Docker Hub access token）。
   docker:
     needs: release
@@ -225,5 +226,5 @@ jobs:
           build-args: |
             SNOWLUMA_VERSION=${{ github.ref_name }}
           tags: |
-            ovonull/snowluma:${{ github.ref_name }}
-            ovonull/snowluma:latest
+            ${{ vars.DOCKER_IMAGE }}:${{ github.ref_name }}
+            ${{ vars.DOCKER_IMAGE }}:latest
