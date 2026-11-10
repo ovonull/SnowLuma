@@ -184,95 +184,50 @@ jobs:
           overwrite: true
           if-no-files-found: error
 
-  # Fire the "latest dev" Docker build on SnowLuma.Docker.Framework — but only
-  # for `dev`. Mirrors release.yml's dispatch-docker, parameterized for dev:
-  # tag=dev (rolling) + sha_tag=dev-<12sha> (immutable), also_latest=false so it
-  # never touches the stable :latest, platforms=amd64, and artifact_run_id so the
-  # downstream build pulls THIS run's hand-off artifact instead of a Release.
-  dispatch-dev-docker:
+  # dev 分支的 Dev Build 直接在仓库内构建多架构镜像并推送 Docker Hub。
+  # 不依赖上游跨仓库构建；镜像名取 secrets.DOCKERHUB_USERNAME/snowluma，tag=dev。
+  # 需配 DOCKERHUB_USERNAME 与 DOCKERHUB_TOKEN。
+  docker:
     needs: [build]
     if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
-    environment: SnowLuma
-    permissions:
-      contents: read
     steps:
-      - name: Compute short SHA
-        id: sha
-        run: echo "short=${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+      - name: Checkout
+        uses: actions/checkout@v6
 
-      - name: Dispatch dev Docker build
-        uses: actions/github-script@v8
-        env:
-          RELEASE_REPOSITORY: ${{ vars.DOCKER_RELEASE_REPOSITORY }}
-          DOCKER_IMAGE: ${{ vars.DOCKER_IMAGE }}
-          DOCKER_WORKFLOW: ${{ vars.DOCKER_WORKFLOW }}
-          DOCKER_REF: ${{ vars.DOCKER_REF }}
-          SHA_TAG: dev-${{ steps.sha.outputs.short }}
-          ARTIFACT_RUN_ID: ${{ github.run_id }}
+      - name: Download linux-x64 artifact
+        uses: actions/download-artifact@v4
         with:
-          github-token: ${{ secrets.SNOWLUMA_TOKEN }}
-          script: |
-            const target = process.env.RELEASE_REPOSITORY;
-            if (!target || !target.includes('/')) {
-              throw new Error('Set SnowLuma environment variable DOCKER_RELEASE_REPOSITORY to owner/repo.');
-            }
-            const [owner, repo] = target.split('/');
-            const sourceRepo = context.repo.owner + '/' + context.repo.repo;
-            const image = process.env.DOCKER_IMAGE || 'motricseven7/snowluma';
-            const workflowId = process.env.DOCKER_WORKFLOW || 'docker-image.yml';
-            const ref = process.env.DOCKER_REF || 'main';
-            const runId = String(process.env.ARTIFACT_RUN_ID);
-            const shaTag = process.env.SHA_TAG;
+          name: SnowLuma-dev-${{ github.sha }}-linux-x64
+          path: dist
 
-            await github.rest.actions.createWorkflowDispatch({
-              owner,
-              repo,
-              workflow_id: workflowId,
-              ref,
-              inputs: {
-                image,
-                tag: 'dev',
-                push: 'true',
-                platforms: 'linux/amd64',
-                also_latest: 'false',
-                snowluma_repository: sourceRepo,
-                artifact_run_id: runId,
-                sha_tag: shaTag,
-              },
-            });
-            core.info(`Dispatched ${workflowId}@${ref} on ${target} for dev (image=${image}:dev + :${shaTag}, src run ${runId}).`);
+      - name: Download linux-arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SnowLuma-dev-${{ github.sha }}-linux-arm64
+          path: dist
 
-            // Best-effort: resolve the dispatched run by its unique run-name
-            // marker so the summary links straight to it (every dev dispatch is
-            // tag=dev, so we key on the source run id, not the tag).
-            const marker = `(src-run ${runId})`;
-            let runUrl = '';
-            for (let i = 0; i < 6 && !runUrl; i++) {
-              await new Promise((r) => setTimeout(r, 5000));
-              try {
-                const { data } = await github.rest.actions.listWorkflowRuns({
-                  owner,
-                  repo,
-                  workflow_id: workflowId,
-                  event: 'workflow_dispatch',
-                  per_page: 30,
-                });
-                const hit = data.workflow_runs.find(
-                  (r) => (r.display_title || r.name || '').includes(marker),
-                );
-                if (hit) runUrl = hit.html_url;
-              } catch (e) {
-                core.warning(`Downstream run lookup failed: ${e.message}`);
-              }
-            }
-            const workflowUrl = `https://github.com/${owner}/${repo}/actions/workflows/${workflowId}`;
-            await core.summary
-              .addHeading('dev Docker dispatch', 3)
-              .addList([
-                `source SHA: ${context.sha}`,
-                `source run id: ${runId}`,
-                `image: ${image}:dev + ${image}:${shaTag}`,
-                `downstream run: ${runUrl || `(not resolved yet — see ${workflowUrl}, look for ${marker})`}`,
-              ])
-              .write();
+      - name: Keep only full tarballs
+        run: rm -f dist/*-lite.tar.gz
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.dev
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/snowluma:dev

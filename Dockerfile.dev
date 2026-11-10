@@ -1,0 +1,46 @@
+# Dev Build 专用镜像：基于 build job 产出的完整版发版包（含内置 Node.js）。
+# 与 release 的 Dockerfile 不同，dev 没有 GitHub Release 包，改用流水线 artifact。
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 系统库：ca-certificates 用于下载与 HTTPS；其余为常见 native 模块运行依赖。
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    rsync \
+    bash \
+    libnss3 \
+    libssl3 \
+    libstdc++6 \
+    zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+
+# 流水线把对应架构的完整版包放进 dist/（SnowLuma-dev-<arch>.tar.gz，含内置 node）。
+# 按目标架构选择，支持多架构一次 build。
+COPY dist/ /tmp/dist/
+RUN ARCH=$([ "${TARGETARCH:-amd64}" = "arm64" ] && echo linux-arm64 || echo linux-x64) \
+    && mkdir -p /opt/snowluma \
+    && tar -xzf /tmp/dist/SnowLuma-dev-${ARCH}.tar.gz -C /opt/snowluma \
+    && chmod +x /opt/snowluma/launcher.sh /opt/snowluma/node \
+    && rm -rf /tmp/dist
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# 数据卷：首次启动把 /opt/snowluma 复制到 /data 并在此运行。
+VOLUME ["/data"]
+WORKDIR /data
+
+# 容器外访问 WebUI 必须监听 0.0.0.0；无人值守部署自动确认协议；日志落到数据卷内。
+ENV SNOWLUMA_WEBUI_HOST=0.0.0.0
+ENV SNOWLUMA_ACCEPT_EULA=1
+ENV SNOWLUMA_ACCEPT_PRIVACY=1
+ENV SNOWLUMA_LOG_DIR=/data/logs
+
+EXPOSE 5099
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD []
