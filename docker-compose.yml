@@ -6,22 +6,42 @@ services:
         # 你的 fork 版本与仓库，按需修改
         SNOWLUMA_VERSION: v2.4.2
         SNOWLUMA_REPO: ovonull/SnowLuma
+    image: ovonull/snowluma:latest
     container_name: snowluma
     restart: unless-stopped
-    ports:
-      # WebUI 管理界面
-      - "5099:5099"
-      # OneBot WebSocket / HTTP 端口按需放开（在 WebUI 里配置具体端口后在此加映射）
-      # - "6700:6700"
+    # QQ（Electron/Chromium）需要 ptrace 与放开 seccomp，否则启动崩溃
+    shm_size: 1gb
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
     environment:
+      VNC_PASSWD: ${VNC_PASSWD:-vncpasswd}
+      SNOWLUMA_UID: ${SNOWLUMA_UID:-1000}
+      SNOWLUMA_GID: ${SNOWLUMA_GID:-1000}
+      SNOWLUMA_WEBUI_PORT: ${SNOWLUMA_WEBUI_PORT:-5099}
       SNOWLUMA_WEBUI_HOST: "0.0.0.0"
+      SNOWLUMA_LOG_LEVEL: ${SNOWLUMA_LOG_LEVEL:-info}
+      SNOWLUMA_SCREEN: ${SNOWLUMA_SCREEN:-1920x1080x16}
+      SNOWLUMA_HOOK_AUTOLOAD: ${SNOWLUMA_HOOK_AUTOLOAD:-1}
       SNOWLUMA_ACCEPT_EULA: "1"
       SNOWLUMA_ACCEPT_PRIVACY: "1"
-      SNOWLUMA_LOG_DIR: "/data/logs"
-      # 容器环境一般没有桌面 QQ；如需自动注入 QQ 进程再开启
-      # SNOWLUMA_HOOK_AUTOLOAD: "1"
+    ports:
+      # 原生 VNC（可选，一般用不到）
+      - "${VNC_PORT:-5900}:5900"
+      # noVNC 浏览器远程桌面：扫码登录 QQ 用
+      - "${NOVNC_PORT:-6081}:6081"
+      # SnowLuma WebUI 管理界面
+      - "${SNOWLUMA_WEBUI_HOST_PORT:-5099}:${SNOWLUMA_WEBUI_PORT:-5099}"
+      # OneBot HTTP / WebSocket：机器人收发消息端口（在 WebUI 里配置具体端口）
+      - "${ONEBOT_HTTP_PORT:-3000}:3000"
+      - "${ONEBOT_WS_PORT:-3001}:3001"
     volumes:
-      - snowluma-data:/data
+      - snowluma-data:/app/snowluma-data
+      - snowluma-qq-config:/app/.config
+      - snowluma-qq-data:/app/.local/share
 
 volumes:
   snowluma-data:
+  snowluma-qq-config:
+  snowluma-qq-data:
